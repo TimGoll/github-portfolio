@@ -59,6 +59,16 @@
         exit(1);
     });
 
+    // warnings abort the rebuild as well, otherwise they could end up in the generated pages
+    set_error_handler(function($severity, $message, $file, $line) {
+        // errors that are suppressed with @ are ignored
+        if (!(error_reporting() & $severity)) {
+            return false;
+        }
+
+        throw new ErrorException($message . " in " . basename($file) . " on line " . $line, 0, $severity, $file, $line);
+    });
+
     echolog("Started rebuilding the website cache, this may take a while...", 0);
     echo("\n");
 
@@ -291,13 +301,14 @@
 
     // swap in the new cache, rename() can't replace an existing folder on every system,
     // therefore the old cache is moved out of the way first
-    if (is_dir($cache_dir) and !rename($cache_dir, $old_dir)) {
+    // the warnings of rename() are suppressed, a failure is handled here so that the old cache can be restored
+    if (is_dir($cache_dir) and !@rename($cache_dir, $old_dir)) {
         throw new RuntimeException("failed to move the old cache out of the way");
     }
 
-    if (!rename($tmp_dir, $cache_dir)) {
+    if (!@rename($tmp_dir, $cache_dir)) {
         if (is_dir($old_dir)) {
-            rename($old_dir, $cache_dir);
+            @rename($old_dir, $cache_dir);
         }
 
         throw new RuntimeException("failed to move the new cache into place");
