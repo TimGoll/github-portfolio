@@ -1,242 +1,125 @@
-import * as integration from "./integration.js";
-import * as misc from "./misc.js";
-import DOMBuilder from "./dombuilder.js";
+// all pages are prerendered by the cache rebuild and work without JavaScript, this script only
+// adds the transitions between the landing page and the project pages without reloading the page
 
-var projects = [];
+const landing = document.getElementById("landing");
+const popup = document.getElementById("popup");
+const landingTitle = document.body.dataset.title;
+
+// the popup content of every project page that was already loaded
+const pages = new Map();
+
 var lastScrollPos = 0;
 
-async function requestImage(name, obj) {
-    let image = await integration.requestGitHubImageFile({
-        origin: config.origin,
-        owner: config.core.owner,
-        repository: config.core.repository,
-        defaultBranch: config.core.defaultBranch,
-        file: "webcontent/assets/" + name + ".png"
-    });
-
-    if (image != undefined) {
-        obj.src = image
-    }
+function isPopupOpen() {
+    return popup.style.display !== "none";
 }
 
-/** SETUP FUNCTIONS **/
+async function requestPage(projectId) {
+    if (!pages.has(projectId)) {
+        const response = await fetch("/" + projectId, {
+            credentials: "omit"
+        });
 
-function setupCore() {
-    window.document.title = config.title;
+        const page = new DOMParser().parseFromString(await response.text(), "text/html");
 
-    let domBuilderFooter = new DOMBuilder(document.getElementById("footer"));
-
-    domBuilderFooter
-        .build("a", { href: "/legal" })
-        .lastElement.innerHTML = "Legal Notice";
-
-    domBuilderFooter.lastElement.innerHTML += " - ";
-
-    domBuilderFooter
-        .build("a", { href: "mailto:" + config.contact })
-        .lastElement.innerHTML = "Contact";
-
-    domBuilderFooter.lastElement.innerHTML += " - ";
-
-    domBuilderFooter
-        .build("a", { href: "https://github.com/" + config.core.owner + "/" + config.core.repository, target: "_blank" })
-        .lastElement.innerHTML = "Source";
-
-    domBuilderFooter.lastElement.innerHTML += " - © " + config.copyright.startyear + "-" + new Date().getFullYear() + " by " + config.copyright.name;
-}
-
-async function setupInfo() {
-    document.getElementById("bio").innerHTML = await integration.requestCachedParsedMarkdownFile({
-        owner: config.bio.owner,
-        repository: config.bio.repository,
-        defaultBranch: config.bio.defaultBranch,
-        file: "README.html"
-    })
-}
-
-
-async function setupProjects() {
-    projects = await integration.requestCachedProjectData();
-
-    // after the project table is available, the page should be set
-    setPage(window.location.pathname.substr(1), true);
-
-    let domBuilderProjects = new DOMBuilder(document.getElementById("projects"));
-
-    for (let i = 0; i < projects.length; i++) {
-        let project = projects[i];
-
-        if (project.hidden) {
-            continue;
+        // unknown projects are answered with the landing page
+        if (!response.ok || page.body.dataset.page !== projectId) {
+            return undefined;
         }
 
-        let domBuilderContent = domBuilderProjects
-            .build("div", { class: "mb-3 d-flex flex-content-stretch col-12 col-md-6 col-lg-4" })
-            .build("div", { class: "Box of-hidden d-flex w-100 project-list-item-item" })
-            .build("div", { class: "project-list-item-content", project: i });
-
-        let domBuilderImgArea = domBuilderContent
-            .build("div", { class: "image-box-height of-hidden img-project" })
-
-        let domBuilderImg = domBuilderImgArea
-            .build("img", { class: "object-fit-cover w-100 h-100", src: "src/img/no_icon.png" });
-
-        domBuilderImgArea
-            .build("div", { class: "date-box", innerHTML: new Date(project.date).toLocaleDateString("de-DE") });
-
-        let domBuilderText = domBuilderContent
-            .build("div", { class: "d-flex flex-dir-col flex-grow-2 p-3" });
-
-        domBuilderText
-            .build("h3", { class: "mt-0", innerHTML: project.name });
-
-        domBuilderText
-            .build("p", { class: "mb-0", innerHTML: project.description });
-
-        let domBuilderTopics = domBuilderContent
-            .build("div", { class: "d-flex flex-grow-1 p-3 pt-0 topics-area" });
-
-        for (let i = 0; i < project.topics.length; i++) {
-            let topic = project.topics[i];
-            let color = misc.stringToColor(topic)
-
-            domBuilderTopics
-                .build("div", {
-                    class: "topic-box",
-                    style: "background-color: " + color + "; color: " + misc.getTextColor(color),
-                    innerHTML: topic
-                });
-        }
-
-        domBuilderContent.lastElement.addEventListener("click", openProject);
-
-        requestImage(project.id, domBuilderImg.lastElement);
-    }
-}
-
-async function openProject(_, project_id, preventStatePush) {
-    // if a specific project should be opened this parameter is set
-    let num = -1;
-
-    if (project_id !== undefined) {
-        for (let i = 0; i < projects.length; i++) {
-            let project = projects[i];
-
-            if (project.id == project_id) {
-                num = i;
-
-                break;
-            }
-        }
-
-        // if the project id wasn't found, redirect to landing page
-        if (num == -1) {
-            closeProject();
-
-            return;
-        }
-    } else {
-        num = parseInt(this.getAttribute("project"));
+        pages.set(projectId, {
+            title: page.title,
+            popup: page.getElementById("popup").innerHTML
+        });
     }
 
+    return pages.get(projectId);
+}
+
+async function openProject(projectId, preventStatePush) {
+    let page;
+
+    try {
+        page = await requestPage(projectId);
+    } catch (error) {
+        page = undefined;
+    }
+
+    // if the page can't be loaded in the background, the browser should simply open it
+    if (page === undefined) {
+        window.location.href = "/" + projectId;
+
+        return;
+    }
 
     // cache the last scroll position and reset the scroll pos to 0
-    lastScrollPos = window.scrollY;
+    if (!isPopupOpen()) {
+        lastScrollPos = window.scrollY;
+    }
+
+    popup.innerHTML = page.popup;
+
+    // hide landing page and unhide popup
+    landing.setAttribute("style", "display: none;");
+    popup.setAttribute("style", "display: block; min-height: 100%;");
     window.scroll(0, 0);
-
-    // hide landing page
-    document.getElementById("landing").setAttribute("style", "display: none;")
-
-    // unhide popup
-    document.getElementById("popup").setAttribute("style", "display: block; min-height: 100%;")
-
-    let project = projects[num];
-
-    // populate
-    document.getElementById("project-title").innerHTML = project.name;
-
-    if (project.repo_based == true) {
-        document.getElementById("project-text").innerHTML = await integration.requestCachedParsedMarkdownFile({
-            owner: project.owner,
-            repository: project.id,
-            defaultBranch: project.default_branch,
-            file: "README.html"
-        });
-    } else {
-        document.getElementById("project-text").innerHTML = await integration.requestCachedParsedMarkdownFile({
-            owner: config.core.owner,
-            repository: config.core.repository,
-            defaultBranch: config.core.defaultBranch,
-            file: project.id + ".html"
-        });
-    }
-
-    // fill info box
-    let projectTop = document.getElementById("project-top")
-
-    projectTop.innerHTML = "Project started at <b>" + new Date(project.date).toLocaleDateString("de-DE") + "</b>";
-
-    console.log(project);
-
-    if (project.repo_based == true) {
-        projectTop.innerHTML += " | <a href=\"//github.com/" + project.owner + "/" + project.id + "\" target=\"_blank\">See on GitHub</a>";
-    } else if (project.source !== "") {
-        projectTop.innerHTML += " | <a href=\"//github.com/" + project.source + "\" target=\"_blank\">See on GitHub</a>";
-    }
-
-    if (project.repo_based == true || project.source !== "") {
-        projectTop.innerHTML += " (" + project.commit_count + " commits)";
-    }
-
-    if (project.homepage !== "") {
-        projectTop.innerHTML += " | <a href=\"" + project.homepage + "\" target=\"_blank\">See homepage</a>";
-    }
-
-    // fill topics box
-    let projectFooter = document.getElementById("project-footer")
-
-    projectFooter.innerHTML = "<b>Topics: </b>";
-
-    for (let i = 0; i < project.topics.length; i++) {
-        if (i != 0) {
-            projectFooter.innerHTML += ", ";
-        }
-
-        projectFooter.innerHTML += project.topics[i];
-    }
 
     // update browser history
     if (!preventStatePush) {
-        window.history.pushState({}, "", project.id);
+        window.history.pushState({}, "", "/" + projectId);
     }
-    window.document.title = config.title + " // " + project.name;
+    window.document.title = page.title;
 }
 
-function closeProject(_, preventStatePush) {
-    document.getElementById("project-title").innerHTML = "";
-    document.getElementById("project-text").innerHTML = "";
+function closeProject(preventStatePush) {
+    if (!isPopupOpen()) {
+        return;
+    }
 
-    document.getElementById("landing").setAttribute("style", "display: block;");
-    document.getElementById("popup").setAttribute("style", "display: none;");
+    landing.setAttribute("style", "display: block;");
+    popup.setAttribute("style", "display: none;");
     window.scroll(0, lastScrollPos);
 
     if (!preventStatePush) {
         window.history.pushState({}, "", "/");
     }
-    window.document.title = config.title;
+    window.document.title = landingTitle;
 }
 
-function setPage(project_id, preventStatePush) {
-    if (project_id != "") {
-        openProject(undefined, project_id, preventStatePush);
+function setPage(projectId, preventStatePush) {
+    if (projectId != "") {
+        openProject(projectId, preventStatePush);
     } else {
-        closeProject(undefined, preventStatePush);
+        closeProject(preventStatePush);
     }
 }
 
-window.addEventListener("load", function() {
-    document.getElementById("button-close").addEventListener("mouseup", closeProject);
-})
+function currentProjectId() {
+    return window.location.pathname.replace(/^\/|\/$/g, "");
+}
+
+// links to projects and the close button are handled here, the listener is on the document
+// because the content of the popup is replaced
+document.addEventListener("click", function(e) {
+    // let the browser handle new tabs and windows
+    if (e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) {
+        return;
+    }
+
+    const projectLink = e.target.closest("a[data-project]");
+
+    if (projectLink) {
+        e.preventDefault();
+        openProject(projectLink.dataset.project);
+
+        return;
+    }
+
+    if (e.target.closest("#button-close")) {
+        e.preventDefault();
+        closeProject();
+    }
+});
 
 window.addEventListener('keyup', function(e) {
     if (e.defaultPrevented) {
@@ -252,14 +135,19 @@ window.addEventListener('keyup', function(e) {
 
 //catch history change events
 window.onpopstate = function() {
-    setPage(window.location.pathname.substr(1), true);
+    const closing = currentProjectId() == "";
+
+    setPage(currentProjectId(), true);
 
     // hacky solution to guarantee that the scrolling is reset
-    window.setTimeout(function() {
-        window.scroll(0, lastScrollPos);
-    }, 0);
+    if (closing) {
+        window.setTimeout(function() {
+            window.scroll(0, lastScrollPos);
+        }, 0);
+    }
 };
 
-setupCore();
-setupInfo();
-setupProjects();
+// unknown pages are answered with the landing page, the url should reflect that
+if (!isPopupOpen() && currentProjectId() != "") {
+    window.history.replaceState({}, "", "/");
+}

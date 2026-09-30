@@ -1,9 +1,15 @@
 <?php
 
+// GitHub requires a user agent that identifies the application
+const USER_AGENT = "github-portfolio (+https://github.com/TimGoll/github-portfolio)";
+
 function request_get_file_contents($URL) {
     $c = curl_init();
     curl_setopt($c, CURLOPT_RETURNTRANSFER, 1);
     curl_setopt($c, CURLOPT_URL, $URL);
+    curl_setopt($c, CURLOPT_USERAGENT, USER_AGENT);
+    curl_setopt($c, CURLOPT_FOLLOWLOCATION, true);
+    curl_setopt($c, CURLOPT_TIMEOUT, 60);
     $contents = curl_exec($c);
     $status = curl_getinfo($c, CURLINFO_HTTP_CODE);
     curl_close($c);
@@ -22,16 +28,13 @@ function request_api_call($url, $token, $type, $curl_data = array()) {
 
     $curl = curl_init($url);
 
-    // GitHub requires a user agent that identifies the application
-    $agent = "github-portfolio (+https://github.com/TimGoll/github-portfolio)";
-
     curl_setopt($curl, CURLOPT_HTTPHEADER, array(
         "Accept: application/vnd.github+json",
         "X-GitHub-Api-Version: 2022-11-28",
         "Content-Type: application/json",
         "Authorization: Bearer " . $token
     ));
-    curl_setopt($curl, CURLOPT_USERAGENT, $agent);
+    curl_setopt($curl, CURLOPT_USERAGENT, USER_AGENT);
     curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($curl, $type, true);
     curl_setopt($curl, CURLOPT_FOLLOWLOCATION, true);

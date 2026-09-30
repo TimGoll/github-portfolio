@@ -59,7 +59,12 @@ function cache_file($project, $config, $cache_dir) {
 
         // links are fixed in the rendered html, this way code blocks are skipped automatically
         // because their content is text and not a link element
-        $html = fix_links($response["result"], $project, $config);
+        $dom = html_load($response["result"]);
+
+        fix_links($dom, $project, $config);
+        mirror_images($dom, $cache_dir);
+
+        $html = html_save($dom);
     }
 
     if (!is_dir($html_path) and !mkdir($html_path, 0777, true)) {
@@ -71,18 +76,12 @@ function cache_file($project, $config, $cache_dir) {
     }
 
     echolog("stored file in cache on server", 2);
+
+    return $html;
 }
 
-function fix_links($html, $project, $config) {
+function fix_links($dom, $project, $config) {
     echolog("starting link fixing", 2);
-
-    // wrap the fragment in a full document so that DOMDocument reads it as UTF-8
-    $dom = new DOMDocument();
-
-    $use_errors = libxml_use_internal_errors(true); // unknown html5 tags would raise warnings
-    $dom->loadHTML("<!DOCTYPE html><html><head><meta charset=\"utf-8\"></head><body>" . $html . "</body></html>");
-    libxml_clear_errors();
-    libxml_use_internal_errors($use_errors);
 
     // collect all links first, GitHub wraps images in a link to the image itself,
     // those links should point to the raw image as well
@@ -133,15 +132,6 @@ function fix_links($html, $project, $config) {
 
         $element->setAttribute($attribute, $new_link);
     }
-
-    // only return the content of the body, not the wrapper document
-    $fixed_html = "";
-
-    foreach ($dom->getElementsByTagName("body")->item(0)->childNodes as $node) {
-        $fixed_html .= $dom->saveHTML($node);
-    }
-
-    return $fixed_html;
 }
 
 function build_link($link, $is_image, $project, $config) {

@@ -30,6 +30,9 @@
     include_once("lib/r_rmdir.php");
     include_once("lib/echo_log.php");
     include_once("lib/cache_file.php");
+    include_once("lib/html.php");
+    include_once("lib/images.php");
+    include_once("lib/render.php");
 
     // the new cache is built in a temporary folder and only replaces the old one if
     // everything succeeded, this way the website is never empty or broken
@@ -182,12 +185,18 @@
             $project_list[$i]["default_branch"] = "main";
         }
 
-        if (!array_key_exists("homepage", $project)) {
+        // GitHub returns null if a repository has no homepage or description
+        if (!isset($project_list[$i]["homepage"])) {
             $project_list[$i]["homepage"] = "";
         }
 
-        if (!array_key_exists("description", $project)) {
+        if (!isset($project_list[$i]["description"])) {
             $project_list[$i]["description"] = "";
+        }
+
+        // the id is used as a folder name and in the url of the project page
+        if (!preg_match("/^[A-Za-z0-9][A-Za-z0-9._-]*$/", $project["id"]) or $project["id"] === "src") {
+            throw new RuntimeException("invalid project id \"" . $project["id"] . "\", only letters, numbers, '.', '_' and '-' are allowed");
         }
 
         if (!array_key_exists("source", $project)) {
@@ -206,9 +215,15 @@
 
     echolog("starting to fetch project contents", 1);
 
+    if (count(array_unique(array_column($project_list, "id"))) !== count($project_list)) {
+        throw new RuntimeException("project ids have to be unique");
+    }
+
     // iterate over all projects, request their markdown files, fix the links and translate to HTML
+    $project_html = [];
+
     foreach ($project_list as $project) {
-        cache_file($project, $config, $tmp_dir);
+        $project_html[$project["id"]] = cache_file($project, $config, $tmp_dir);
     }
 
     echolog("finished fetching all projects", 1);
@@ -216,7 +231,7 @@
     echolog("caching bio page", 1);
 
     // also cache the main bio
-    cache_file(array(
+    $bio_html = cache_file(array(
         "owner" => $config["bio"]["owner"],
         "id" => $config["bio"]["repository"],
         "default_branch" => $config["bio"]["default_branch"],
@@ -224,6 +239,34 @@
     ), $config, $tmp_dir);
 
     echolog("finished caching bio page", 1);
+
+    echolog("mirroring preview images", 1);
+
+    // preview images are optional, projects without one get a placeholder
+    for ($i = 0; $i < count($project_list); $i++) {
+        $preview = mirror_image($config["raw_base"]
+            . $config["core"]["owner"] . "/"
+            . $config["core"]["repository"] . "/"
+            . $config["core"]["default_branch"] . "/webcontent/assets/"
+            . $project_list[$i]["id"] . ".png", $tmp_dir);
+
+        if ($preview === null) {
+            echolog("no preview image for " . $project_list[$i]["id"] . ", using placeholder", 2);
+
+            $size = getimagesize("../img/no_icon.png");
+            $preview = ["url" => "/src/img/no_icon.png", "width" => $size[0], "height" => $size[1], "is_placeholder" => true];
+        } else {
+            $preview["is_placeholder"] = false;
+        }
+
+        $project_list[$i]["preview"] = $preview;
+    }
+
+    echolog("rendering pages", 1);
+
+    render_pages($project_list, $project_html, $bio_html, $config, $tmp_dir);
+
+    echolog("finished rendering pages", 1);
 
     // swap in the new cache, rename() can't replace an existing folder on every system,
     // therefore the old cache is moved out of the way first

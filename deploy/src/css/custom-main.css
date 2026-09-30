@@ -52,6 +52,13 @@ body {
     flex-direction: column;
 }
 
+/* the whole project box is a link, it should look like the rest of the box */
+.markdown-body a.project-list-item-content,
+.markdown-body a.project-list-item-content:hover {
+    color: inherit;
+    text-decoration: none;
+}
+
 .markdown-body .of-hidden {
     overflow: hidden;
 }
