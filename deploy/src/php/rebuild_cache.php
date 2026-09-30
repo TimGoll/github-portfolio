@@ -33,6 +33,7 @@
     include_once("lib/html.php");
     include_once("lib/images.php");
     include_once("lib/render.php");
+    include_once("lib/stats.php");
 
     // the new cache is built in a temporary folder and only replaces the old one if
     // everything succeeded, this way the website is never empty or broken
@@ -129,6 +130,8 @@
 
         $repo_data = json_decode($repo_response["result"], true);
 
+        $project_list[$i]["pushed_at"] = $repo_data["pushed_at"] ?? "";
+
         // only add date if not set manually
         if (!array_key_exists("date", $project)) {
             $project_list[$i]["date"] = $repo_data["created_at"];
@@ -202,6 +205,10 @@
         if (!array_key_exists("source", $project)) {
             $project_list[$i]["source"] = "";
         }
+
+        if (!isset($project_list[$i]["pushed_at"])) {
+            $project_list[$i]["pushed_at"] = "";
+        }
     }
 
     echolog("finished updating project data with data from GitHub", 1);
@@ -251,20 +258,34 @@
             . $project_list[$i]["id"] . ".png", $tmp_dir);
 
         if ($preview === null) {
-            echolog("no preview image for " . $project_list[$i]["id"] . ", using placeholder", 2);
-
-            $size = getimagesize("../img/no_icon.png");
-            $preview = ["url" => "/src/img/no_icon.png", "width" => $size[0], "height" => $size[1], "is_placeholder" => true];
-        } else {
-            $preview["is_placeholder"] = false;
+            echolog("no preview image for " . $project_list[$i]["id"] . ", showing its initials", 2);
         }
 
         $project_list[$i]["preview"] = $preview;
     }
 
+    echolog("fetching stats from GitHub", 1);
+
+    // the stats are optional, without them the section is left out
+    $stats = request_stats($config);
+
+    if ($stats !== null and file_put_contents($tmp_dir . "/stats.json", json_encode($stats)) === FALSE) {
+        throw new RuntimeException("failed to write stats.json");
+    }
+
+    $avatar = mirror_image($config["file_base"] . $config["bio"]["owner"] . ".png?size=176", $tmp_dir);
+
+    if ($avatar === null) {
+        echolog("WARNING: failed to download the avatar, using initials instead", 2);
+    }
+
     echolog("rendering pages", 1);
 
-    render_pages($project_list, $project_html, $bio_html, $config, $tmp_dir);
+    render_pages($project_list, $project_html, [
+        "html" => $bio_html,
+        "stats" => $stats,
+        "avatar" => $avatar
+    ], $config, $tmp_dir);
 
     echolog("finished rendering pages", 1);
 

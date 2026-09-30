@@ -25,7 +25,6 @@
                 "start_year" => 2014,
                 "name" => "Tim Goll"
             ],
-            "min_width" => "200px",
             "max_width" => "980px"
         ],
         "api_key" => "xxx",
