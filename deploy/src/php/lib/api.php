@@ -105,11 +105,13 @@ function request_repo_commit_amount($token, $repo) {
         return 0;
     }
 
-    $last_page_link = link_get($return["header"]["link"][0], "last");
+    // the link header is only sent if there is more than one page of commits
+    $link_header = $return["header"]["link"][0] ?? null;
+    $last_page_link = $link_header === null ? null : link_get($link_header, "last");
 
     // last page unset
     if ($last_page_link === null) {
-        return json_decode(count($return["result"], true));
+        return count(json_decode($return["result"], true));
     }
 
     return link_param_get($last_page_link, "page");

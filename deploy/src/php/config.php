@@ -4,8 +4,8 @@
         "file_base" => "https://github.com/",
         "core" => [
             "owner" => "TimGoll",
-            "repository" => "github-portfolio",
-            "default_branch" => "master"
+            "repository" => "TimGollDE",
+            "default_branch" => "main"
         ],
         "bio" => [
             "owner" => "TimGoll",
