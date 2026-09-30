@@ -14,4 +14,9 @@
         ],
         "api_key" => "xxx"
     ];
+
+    // secrets.php is not tracked by git and overwrites values such as the api key
+    if (file_exists(__DIR__ . "/secrets.php")) {
+        $config = array_replace_recursive($config, include(__DIR__ . "/secrets.php"));
+    }
 ?>

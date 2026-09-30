@@ -43,6 +43,18 @@ The `core` one should point to your fork of this repository, the `bio` one shoul
 
 The API key is optional, but should be added. GitHub limits the API to 60 calls per hour if no API key is used. A key increases that number to 5000. Such a key can be created [here](https://github.com/settings/tokens). You don't have to enable any of the asked permissions, as we don't want to add, remove or change repositories.
 
+To keep the key out of git, don't put it into `config.php`. Instead create a file `secrets.php` next to it, which is ignored by git and overwrites the values from `config.php`:
+
+```php
+<?php
+    return [
+        "api_key" => "your_key_here"
+    ];
+?>
+```
+
+Remember to upload this file to your webspace as well.
+
 ### Clientside config
 
 The clientside config is located inside of the `index.html` file. It is split into two speperate parts:
