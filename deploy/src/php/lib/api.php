@@ -1,10 +1,5 @@
 <?php
 
-enum Type {
-    case POST;
-    case GET;
-}
-
 function request_get_file_contents($URL) {
     $c = curl_init();
     curl_setopt($c, CURLOPT_RETURNTRANSFER, 1);
@@ -25,10 +20,15 @@ function request_api_call($url, $token, $type, $curl_data = array()) {
 
     $curl = curl_init($url);
 
-    $authorization = "Authorization: Bearer " . $token;
-    $agent = "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1)";
+    // GitHub requires a user agent that identifies the application
+    $agent = "github-portfolio (+https://github.com/TimGoll/github-portfolio)";
 
-    curl_setopt($curl, CURLOPT_HTTPHEADER, array("Content-Type: application/json" , $authorization));
+    curl_setopt($curl, CURLOPT_HTTPHEADER, array(
+        "Accept: application/vnd.github+json",
+        "X-GitHub-Api-Version: 2022-11-28",
+        "Content-Type: application/json",
+        "Authorization: Bearer " . $token
+    ));
     curl_setopt($curl, CURLOPT_USERAGENT, $agent);
     curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($curl, $type, true);
@@ -55,13 +55,14 @@ function request_api_call($url, $token, $type, $curl_data = array()) {
     });
 
     $result = curl_exec($curl);
+    $status = curl_getinfo($curl, CURLINFO_HTTP_CODE);
 
     curl_close($curl);
 
     return array(
         "result" => $result,
         "header" => $headers,
-        "status" => curl_getinfo($curl, CURLINFO_HTTP_CODE)
+        "status" => $status
     );
 }
 
