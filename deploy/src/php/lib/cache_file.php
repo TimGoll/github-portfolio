@@ -117,8 +117,8 @@ function cache_file($project, $config) {
             $new_link = $base
                 . $config["core"]["owner"] . "/"
                 . $config["core"]["repository"] . "/"
-                . $config["core"]["default_branch"]
                 . ($is_image ? "" : "blob/")
+                . $config["core"]["default_branch"]
                 . "/webcontent/assets/"
                 . $link;
         }
