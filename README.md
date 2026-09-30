@@ -13,9 +13,9 @@ As can be seen on the above image, the design includes a dark and a light mode. 
 
 For this repository and give it a fitting name. Before uploading it to your webspace, you have to edit a few files.
 
-### Serverside config
+### Config
 
-Navgiate to `deploy/src/php` and locate the file `config.php`. It should look like this:
+All settings are located in a single file. Navgiate to `deploy/src/php` and locate the file `config.php`. It should look like this:
 
 ```php
 <?php
@@ -32,62 +32,49 @@ Navgiate to `deploy/src/php` and locate the file `config.php`. It should look li
             "repository" => "TimGoll",
             "default_branch" => "main"
         ],
-        "api_key" => "xxx"
+        "site" => [
+            "url" => "https://timgoll.de",
+            "title" => "Tim Goll - Portfolio",
+            "description" => "",
+            "language" => "en",
+            "contact" => "contact@timgoll.de",
+            "copyright" => [
+                "start_year" => 2014,
+                "name" => "Tim Goll"
+            ],
+            "min_width" => "200px",
+            "max_width" => "980px"
+        ],
+        "api_key" => "xxx",
+        "rebuild_token" => ""
     ];
 ?>
 ```
 
-If your project is GitHub based, the first entry can be left unchanged. The following three have to be changed though.
+If your project is GitHub based, the first two entries can be left unchanged. The following ones have to be changed though.
 
 The `core` one should point to your fork of this repository, the `bio` one should point to your GitHub profile repository.
 
+The `site` entries define what the website shows. The `url` is the public address of your website without a trailing slash, it is needed for link previews on social media and in messengers. The `description` is shown in search results and link previews of the landing page and can be left empty. `min_width` and `max_width` set the size of the page.
+
 The API key is optional, but should be added. GitHub limits the API to 60 calls per hour if no API key is used. A key increases that number to 5000. Such a key can be created [here](https://github.com/settings/tokens). You don't have to enable any of the asked permissions, as we don't want to add, remove or change repositories.
 
-### Clientside config
+To keep the key out of git, don't put it into `config.php`. Instead create a file `secrets.php` next to it, which is ignored by git and overwrites the values from `config.php`:
 
-The clientside config is located inside of the `index.html` file. It is split into two speperate parts:
-
-```html
-<style>
-    .markdown-body,
-    .popup-header-content {
-        min-width: 200px;
-        max-width: 980px;
-    }
-</style>
+```php
+<?php
+    return [
+        "api_key" => "your_key_here",
+        "rebuild_token" => "a_long_random_string"
+    ];
+?>
 ```
 
-The first part is used to set the size of the page. These can be changed to fit your personal preferences.
-
-```html
-<script>
-    var config = {
-        origin: "https://raw.githubusercontent.com",
-        core: {
-            owner: "TimGoll",
-            repository: "github-portfolio",
-            defaultBranch: "master"
-        },
-        bio: {
-            owner: "TimGoll",
-            repository: "TimGoll",
-            defaultBranch: "main"
-        },
-        title: "Tim Goll - Portfolio",
-        contact: "contact@timgoll.de",
-        copyright: {
-            startyear: 2014,
-            name: "Tim Goll"
-        }
-    };
-</script>
-```
-
-The second part has the clientside config data. The first three entries here mirror the settings already defined on the server and should therefore be identical. The remaining settings should be self explanatory.
+Remember to upload this file to your webspace as well.
 
 ### Deploying
 
-Once the config is done, everything inside the `deploy` folder has to be uploaded to the root of your website folder. Then the website structure is ready to be used. Only the projects have to be added now.
+Once the config is done, everything inside the `deploy` folder has to be uploaded to the root of your website folder. The webserver has to be an Apache server with `mod_rewrite` enabled, as the `.htaccess` file maps the page urls to the generated pages. Afterwards the cache has to be built once (see [Automatic caching](#automatic-caching)), until then a placeholder page is shown. Only the projects have to be added now.
 
 ## Adding projects
 
@@ -158,7 +145,23 @@ Preview images should be an eye catcher when scrolling through the project list.
 
 While the whole system is GitHub based, it still caches the data on your webserver. This is done with a php script locaed in `deploy/src/php/rebuild_cache.php`.
 
-You can either manually visit this link whenever something changed or you can automate it. Cronjobs or GitHub Actions are two systems that come to mind here.
+The script writes finished HTML pages for the landing page and every project into `deploy/src/cache/pages/`, the templates for them are located in `deploy/src/php/templates/`. This way the website works without JavaScript and search engines and link previews see the full content, JavaScript only adds the transitions between the pages. All preview and article images are downloaded as well and served from your website, so the browsers of your visitors never have to contact GitHub.
+
+Since rebuilding the cache deletes the old one and uses up API calls, the script can't simply be opened in the browser. It can either be run from the command line on the server:
+
+```bash
+php deploy/src/php/rebuild_cache.php
+```
+
+Or it can be triggered over HTTP with a POST request that contains the `rebuild_token` from your `secrets.php` (a random string can be generated with `openssl rand -hex 32`). All other requests are rejected with `403 Forbidden`, and so is every HTTP request if no token is set.
+
+```bash
+curl -X POST -d "token=a_long_random_string" https://your-website.com/src/php/rebuild_cache.php
+```
+
+The token is sent as POST data and not as a URL parameter so that it doesn't end up in server logs or the browser history.
+
+The new cache is built in a temporary folder and only replaces the old one once everything succeeded. If anything fails, the old cache is kept and the script exits with an error message and a non-zero exit code, or `500` over HTTP. You can run this manually whenever something changed or you can automate it. Cronjobs or GitHub Actions are two systems that come to mind here.
 
 ## Used External Sources
 
