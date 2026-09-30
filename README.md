@@ -42,7 +42,6 @@ All settings are located in a single file. Navgiate to `deploy/src/php` and loca
                 "start_year" => 2014,
                 "name" => "Tim Goll"
             ],
-            "min_width" => "200px",
             "max_width" => "980px"
         ],
         "api_key" => "xxx",
@@ -55,7 +54,9 @@ If your project is GitHub based, the first two entries can be left unchanged. Th
 
 The `core` one should point to your fork of this repository, the `bio` one should point to your GitHub profile repository.
 
-The `site` entries define what the website shows. The `url` is the public address of your website without a trailing slash, it is needed for link previews on social media and in messengers. The `description` is shown in search results and link previews of the landing page and can be left empty. `min_width` and `max_width` set the size of the page.
+The `site` entries define what the website shows. The `url` is the public address of your website without a trailing slash, it is needed for link previews on social media and in messengers. The `description` is shown in search results and link previews of the landing page and can be left empty. `max_width` sets the width of the page content.
+
+The landing page shows stats of the GitHub account of the `bio` owner (commits, pull requests and contributed repositories). They are fetched on every rebuild and need the API key. If they can't be fetched, they are simply not shown. Next to them, a "What I build" bar shows the most used topics of your projects.
 
 The API key is optional, but should be added. GitHub limits the API to 60 calls per hour if no API key is used. A key increases that number to 5000. Such a key can be created [here](https://github.com/settings/tokens). You don't have to enable any of the asked permissions, as we don't want to add, remove or change repositories.
 

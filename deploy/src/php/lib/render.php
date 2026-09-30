@@ -3,7 +3,7 @@
 const PAGE_FOLDER = "pages";
 
 // writes the landing page and a page for every project into the cache
-function render_pages($project_list, $project_html, $bio_html, $config, $cache_dir) {
+function render_pages($project_list, $project_html, $bio, $config, $cache_dir) {
     $site = $config["site"];
 
     // the newest projects are shown first, projects without a date at the end
@@ -11,43 +11,50 @@ function render_pages($project_list, $project_html, $bio_html, $config, $cache_d
         return project_timestamp($b) <=> project_timestamp($a);
     });
 
-    // every page contains the landing page, this way the project page can be closed without loading anything
-    $landing_html = render_template("landing.php", [
-        "bio_html" => $bio_html,
-        "project_list" => $project_list,
+    $visible = array_values(array_filter($project_list, function($project) {
+        return empty($project["hidden"]);
+    }));
+
+    assign_topic_hues(topic_list($visible));
+
+    $common = [
         "site" => $site,
         "core" => $config["core"],
-        "has_legal" => in_array("legal", array_column($project_list, "id"), true)
-    ]);
+        "github_url" => $config["file_base"] . $config["bio"]["owner"],
+        "has_legal" => in_array("legal", array_column($project_list, "id"), true),
+        "build_date" => gmdate("Y-m-d")
+    ];
 
-    write_page($cache_dir . "/" . PAGE_FOLDER . "/index.html", render_template("page.php", [
-        "site" => $site,
-        "page_id" => "",
+    write_page($cache_dir . "/" . PAGE_FOLDER . "/index.html", render_template("layout.php", $common + [
         "title" => $site["title"],
         "description" => $site["description"],
         "url" => $site["url"] . "/",
         "image" => null,
-        "landing_html" => $landing_html,
-        "project" => null
+        "is_project" => false,
+        "content" => render_template("landing.php", $common + [
+            "bio" => $bio,
+            "projects" => $visible,
+            "topics" => topic_list($visible),
+            "topic_mix" => topic_mix($visible)
+        ])
     ]));
 
     echolog("rendered landing page", 2);
 
     foreach ($project_list as $project) {
-        $preview = $project["preview"];
+        $html = $project_html[$project["id"]];
 
-        write_page($cache_dir . "/" . PAGE_FOLDER . "/" . $project["id"] . "/index.html", render_template("page.php", [
-            "site" => $site,
-            "page_id" => $project["id"],
+        write_page($cache_dir . "/" . PAGE_FOLDER . "/" . $project["id"] . "/index.html", render_template("layout.php", $common + [
             "title" => $site["title"] . " // " . $project["name"],
             "description" => $project["description"],
             "url" => $site["url"] . "/" . $project["id"],
-            "image" => $preview["is_placeholder"] ? null : $site["url"] . $preview["url"],
-            "landing_html" => $landing_html,
-            "project" => $project,
-            "project_html" => $project_html[$project["id"]],
-            "project_info" => project_info($project),
-            "project_topics" => implode(", ", array_map("e", $project["topics"]))
+            "image" => $project["preview"] === null ? null : $site["url"] . $project["preview"]["url"],
+            "is_project" => true,
+            "content" => render_template("project.php", $common + [
+                "project" => $project,
+                "html" => $html,
+                "toc" => table_of_contents($html)
+            ])
         ]));
 
         echolog("rendered page of " . $project["id"], 2);
@@ -73,27 +80,81 @@ function write_page($file, $html) {
     }
 }
 
-// the info line on top of a project page
-function project_info($project) {
-    $parts = [];
+// the link to the repository of a project, empty if it has none
+function project_repo($project) {
+    return $project["repo_based"] ? $project["owner"] . "/" . $project["id"] : $project["source"];
+}
 
-    $date = format_date($project["date"]);
+// "ATMega 328pb Breakout" -> "AB", "TTT2" -> "T2", shown on projects without a preview image
+function project_initials($name) {
+    $words = preg_split("/[\s_-]+/u", trim($name), -1, PREG_SPLIT_NO_EMPTY);
 
-    if ($date !== "") {
-        array_push($parts, "Project started at <b>" . $date . "</b>");
+    if (count($words) === 0) {
+        return "";
     }
 
-    $repo = $project["repo_based"] ? $project["owner"] . "/" . $project["id"] : $project["source"];
+    if (count($words) === 1) {
+        $chars = preg_split("//u", $words[0], -1, PREG_SPLIT_NO_EMPTY);
 
-    if ($repo !== "") {
-        array_push($parts, "<a href=\"//github.com/" . e($repo) . "\" target=\"_blank\">See on GitHub</a> (" . e($project["commit_count"]) . " commits)");
+        return strtoupper($chars[0] . (count($chars) > 1 ? end($chars) : ""));
     }
 
-    if (!empty($project["homepage"])) {
-        array_push($parts, "<a href=\"" . e($project["homepage"]) . "\" target=\"_blank\">See homepage</a>");
+    return strtoupper(preg_split("//u", $words[0], -1, PREG_SPLIT_NO_EMPTY)[0] . preg_split("//u", end($words), -1, PREG_SPLIT_NO_EMPTY)[0]);
+}
+
+// the number of projects per topic, the most used ones first
+function topic_counts($projects) {
+    $count = [];
+
+    foreach ($projects as $project) {
+        foreach ($project["topics"] as $topic) {
+            $count[$topic] = ($count[$topic] ?? 0) + 1;
+        }
     }
 
-    return implode(" | ", $parts);
+    uksort($count, function($a, $b) use ($count) {
+        return [$count[$b], $a] <=> [$count[$a], $b];
+    });
+
+    return $count;
+}
+
+function topic_list($projects) {
+    return array_keys(topic_counts($projects));
+}
+
+// the most used topics for the "what I build" bar
+function topic_mix($projects, $limit = 8) {
+    return array_slice(topic_counts($projects), 0, $limit, true);
+}
+
+// the sections of a project page, taken from its second level headings
+function table_of_contents($html) {
+    if ($html === "") {
+        return [];
+    }
+
+    $toc = [];
+
+    foreach ((new DOMXPath(html_load($html)))->query("//h2[@id]") as $heading) {
+        array_push($toc, ["id" => $heading->getAttribute("id"), "text" => trim($heading->textContent)]);
+    }
+
+    // a single section is not worth a table of contents
+    return count($toc) > 1 ? $toc : [];
+}
+
+// the website address without the protocol, e.g. ["timgoll", ".de"] for the logo
+function site_name($site) {
+    $host = parse_url($site["url"], PHP_URL_HOST);
+
+    if (!$host) {
+        return [$site["title"], ""];
+    }
+
+    $dot = strrpos($host, ".");
+
+    return $dot === false ? [$host, ""] : [substr($host, 0, $dot), substr($host, $dot)];
 }
 
 function project_timestamp($project) {
@@ -102,35 +163,45 @@ function project_timestamp($project) {
     return $timestamp === FALSE ? 0 : $timestamp;
 }
 
-// same format as toLocaleDateString("de-DE"), e.g. 1.11.2023
+// e.g. 2023-11-01, empty if there is no date
 function format_date($date) {
     $timestamp = empty($date) ? FALSE : strtotime($date);
 
-    return $timestamp === FALSE ? "" : gmdate("j.n.Y", $timestamp);
+    return $timestamp === FALSE ? "" : gmdate("Y-m-d", $timestamp);
 }
 
-// creates a color from a string, the result is identical to the former JavaScript implementation
-// (based on http://jsfiddle.net/sUK45/), therefore the 32 bit integer overflow of JavaScript is emulated
-function topic_color($topic) {
+// every topic gets its own hue, light and dark mode use a fixed lightness so that the text stays readable,
+// the topics are ordered by their use and each hue is a golden angle away from the previous one, this way
+// the most used topics, which are shown next to each other in the "what I build" bar, are easy to tell apart
+function assign_topic_hues($topics) {
+    topic_hue(null, $topics);
+}
+
+function topic_hue($topic, $ranking = null) {
+    static $hues = [];
+
+    if ($ranking !== null) {
+        $hues = [];
+
+        foreach (array_values($ranking) as $i => $ranked_topic) {
+            $hues[$ranked_topic] = (int) round(fmod(210 + $i * 137.508, 360));
+        }
+
+        return null;
+    }
+
+    return $hues[$topic] ?? topic_hash_hue($topic);
+}
+
+// fallback for topics that weren't ranked, calculated the same way as in the design
+function topic_hash_hue($topic) {
     $hash = 0;
 
     foreach (utf16_code_units($topic) as $code) {
-        $hash = $code + (to_int32(to_int32($hash) << 5) - $hash);
+        $hash = to_int32($code + (to_int32($hash << 5) - $hash));
     }
 
-    $color = "#";
-
-    for ($i = 0; $i < 3; $i++) {
-        $color .= sprintf("%02x", (to_int32($hash) >> ($i * 8)) & 0xFF);
-    }
-
-    return $color;
-}
-
-function topic_text_color($background) {
-    $sum = hexdec(substr($background, 1, 2)) + hexdec(substr($background, 3, 2)) + hexdec(substr($background, 5, 2));
-
-    return $sum < 500 ? "#FFFFFF" : "#000000";
+    return abs($hash) % 360;
 }
 
 function to_int32($value) {
@@ -139,7 +210,7 @@ function to_int32($value) {
     return $value >= 0x80000000 ? $value - 0x100000000 : $value;
 }
 
-// JavaScript strings consist of UTF-16 code units, this is what charCodeAt() returns
+// JavaScript strings consist of UTF-16 code units, the hue is calculated the same way as in the design
 function utf16_code_units($string) {
     $units = [];
     $chars = preg_split("//u", $string, -1, PREG_SPLIT_NO_EMPTY);

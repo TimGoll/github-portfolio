@@ -63,6 +63,7 @@ function cache_file($project, $config, $cache_dir) {
 
         fix_links($dom, $project, $config);
         mirror_images($dom, $cache_dir);
+        add_heading_ids($dom);
 
         $html = html_save($dom);
     }
@@ -78,6 +79,32 @@ function cache_file($project, $config, $cache_dir) {
     echolog("stored file in cache on server", 2);
 
     return $html;
+}
+
+// the markdown API returns headings without ids, they are added the same way GitHub does it,
+// this way links to sections inside the document and the table of contents work
+function add_heading_ids($dom) {
+    $used = [];
+
+    foreach ((new DOMXPath($dom))->query("//h1|//h2|//h3|//h4|//h5|//h6") as $heading) {
+        $slug = strtolower(trim($heading->textContent));
+        $slug = preg_replace("/[^\p{L}\p{N}\s_-]/u", "", $slug);
+        $slug = preg_replace("/\s/u", "-", $slug);
+
+        if ($slug === "" or $slug === null) {
+            $slug = "section";
+        }
+
+        // duplicate headings get a number, like on GitHub
+        $id = $slug;
+
+        for ($i = 1; array_key_exists($id, $used); $i++) {
+            $id = $slug . "-" . $i;
+        }
+
+        $used[$id] = true;
+        $heading->setAttribute("id", $id);
+    }
 }
 
 function fix_links($dom, $project, $config) {

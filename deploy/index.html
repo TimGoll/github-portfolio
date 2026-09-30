@@ -19,18 +19,19 @@
     <link rel="stylesheet" href="/src/css/custom-main.css">
 
     <style>
-        .markdown-body {
-            min-width: 200px;
-            max-width: 980px;
+        :root {
+            --page-width: 980px;
         }
     </style>
 </head>
 
 <body>
-    <div class="markdown-body mb-3 mt-3">
-        <h1>Website not built yet</h1>
+    <div class="page-width" style="padding-top: 44px">
+        <div class="panel markdown-body" style="padding: 44px 45px">
+            <h1>Website not built yet</h1>
 
-        <p>The pages of this website are created when the cache is rebuilt. Please run <code>src/php/rebuild_cache.php</code> as described in the README.</p>
+            <p>The pages of this website are created when the cache is rebuilt. Please run <code>src/php/rebuild_cache.php</code> as described in the README.</p>
+        </div>
     </div>
 </body>
 
