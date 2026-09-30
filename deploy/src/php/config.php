@@ -12,7 +12,9 @@
             "repository" => "TimGoll",
             "default_branch" => "main"
         ],
-        "api_key" => "xxx"
+        "api_key" => "xxx",
+        // secret token to rebuild the cache over http, an empty token disables it
+        "rebuild_token" => ""
     ];
 
     // secrets.php is not tracked by git and overwrites values such as the api key

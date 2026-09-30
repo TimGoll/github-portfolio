@@ -1,6 +1,7 @@
 <?php
 
-function cache_file($project, $config) {
+// throws a RuntimeException if the file can't be fetched, translated or stored
+function cache_file($project, $config, $cache_dir) {
     echolog("started caching " . $project["id"], 2);
 
     if ($project["repo_based"]) {
@@ -10,6 +11,12 @@ function cache_file($project, $config) {
             . $project["owner"] . "/"
             . $project["id"] . "/"
             . $project["default_branch"] . "/README.md";
+        $html_path = $cache_dir . "/"
+            . $project["owner"] . "/"
+            . $project["id"] . "/"
+            . $project["default_branch"];
+        $html_file = $html_path . "/README.html";
+        $context = $project["owner"] . "/" . $project["id"];
     } else {
         echolog("project is only a markdown file", 3);
 
@@ -18,47 +25,50 @@ function cache_file($project, $config) {
             . $config["core"]["repository"] . "/"
             . $config["core"]["default_branch"] . "/webcontent/markdown/"
             . $project["id"] . ".md";
-    }
-
-    $markdown = request_get_file_contents($readme_path);
-
-    echolog("fetched file from server", 2);
-
-    echolog("requesting translated markdown from GitHub server via API call", 2);
-
-    // store file as cache
-    if ($project["repo_based"]) {
-        $html_path = "../cache/"
-            . $project["owner"] . "/"
-            . $project["id"] . "/"
-            . $project["default_branch"];
-        $html_file = $html_path . "/README.html";
-
-        $response = request_markdown($config["api_key"], $markdown, "gfm", $project["owner"] . "/" . $project["id"]);
-    } else {
-        $html_path = "../cache/"
+        $html_path = $cache_dir . "/"
             . $config["core"]["owner"] . "/"
             . $config["core"]["repository"] . "/"
             . $config["core"]["default_branch"];
         $html_file = $html_path . "/" . $project["id"] . ".html";
-
-        $response = request_markdown($config["api_key"], $markdown, "gfm", $config["core"]["owner"] . "/" . $project["id"]);
+        $context = $config["core"]["owner"] . "/" . $project["id"];
     }
 
-    $html = $response["result"];
+    $markdown = request_get_file_contents($readme_path);
 
-    echolog("received translated markdown file from server", 2);
-
-    // links are fixed in the rendered html, this way code blocks are skipped automatically
-    // because their content is text and not a link element
-    if ($response["status"] == 200) {
-        $html = fix_links($html, $project, $config);
+    if ($markdown === FALSE) {
+        throw new RuntimeException("failed to fetch " . $readme_path);
     }
 
-    if (!is_dir($html_path)) {
-        mkdir($html_path, 0777, true);
+    echolog("fetched file from server", 2);
+
+    // the markdown API rejects empty texts, an empty file is simply an empty page
+    if ($markdown === "") {
+        echolog("file is empty, nothing to translate", 2);
+
+        $html = "";
+    } else {
+        echolog("requesting translated markdown from GitHub server via API call", 2);
+
+        $response = request_markdown($config["api_key"], $markdown, "gfm", $context);
+
+        if ($response["status"] != 200) {
+            throw new RuntimeException("failed to translate markdown of " . $project["id"] . " (HTTP " . $response["status"] . "): " . $response["result"]);
+        }
+
+        echolog("received translated markdown file from server", 2);
+
+        // links are fixed in the rendered html, this way code blocks are skipped automatically
+        // because their content is text and not a link element
+        $html = fix_links($response["result"], $project, $config);
     }
-    file_put_contents($html_file, $html);
+
+    if (!is_dir($html_path) and !mkdir($html_path, 0777, true)) {
+        throw new RuntimeException("failed to create folder " . $html_path);
+    }
+
+    if (file_put_contents($html_file, $html) === FALSE) {
+        throw new RuntimeException("failed to write " . $html_file);
+    }
 
     echolog("stored file in cache on server", 2);
 }

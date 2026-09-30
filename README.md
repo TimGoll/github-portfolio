@@ -48,7 +48,8 @@ To keep the key out of git, don't put it into `config.php`. Instead create a fil
 ```php
 <?php
     return [
-        "api_key" => "your_key_here"
+        "api_key" => "your_key_here",
+        "rebuild_token" => "a_long_random_string"
     ];
 ?>
 ```
@@ -170,7 +171,21 @@ Preview images should be an eye catcher when scrolling through the project list.
 
 While the whole system is GitHub based, it still caches the data on your webserver. This is done with a php script locaed in `deploy/src/php/rebuild_cache.php`.
 
-You can either manually visit this link whenever something changed or you can automate it. Cronjobs or GitHub Actions are two systems that come to mind here.
+Since rebuilding the cache deletes the old one and uses up API calls, the script can't simply be opened in the browser. It can either be run from the command line on the server:
+
+```bash
+php deploy/src/php/rebuild_cache.php
+```
+
+Or it can be triggered over HTTP with a POST request that contains the `rebuild_token` from your `secrets.php` (a random string can be generated with `openssl rand -hex 32`). All other requests are rejected with `403 Forbidden`, and so is every HTTP request if no token is set.
+
+```bash
+curl -X POST -d "token=a_long_random_string" https://your-website.com/src/php/rebuild_cache.php
+```
+
+The token is sent as POST data and not as a URL parameter so that it doesn't end up in server logs or the browser history.
+
+The new cache is built in a temporary folder and only replaces the old one once everything succeeded. If anything fails, the old cache is kept and the script exits with an error message and a non-zero exit code, or `500` over HTTP. You can run this manually whenever something changed or you can automate it. Cronjobs or GitHub Actions are two systems that come to mind here.
 
 ## Used External Sources
 

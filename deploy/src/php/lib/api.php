@@ -5,12 +5,14 @@ function request_get_file_contents($URL) {
     curl_setopt($c, CURLOPT_RETURNTRANSFER, 1);
     curl_setopt($c, CURLOPT_URL, $URL);
     $contents = curl_exec($c);
+    $status = curl_getinfo($c, CURLINFO_HTTP_CODE);
     curl_close($c);
 
-    if ($contents)
-        return $contents;
-    else
+    // an empty file is valid content, only a failed request returns FALSE
+    if ($contents === FALSE or $status != 200)
         return FALSE;
+    else
+        return $contents;
 }
 
 function request_api_call($url, $token, $type, $curl_data = array()) {
