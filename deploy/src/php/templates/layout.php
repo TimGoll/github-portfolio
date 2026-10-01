@@ -12,7 +12,7 @@
     <meta property="og:description" content="<?= e($description) ?>">
 <?php endif; ?>
     <meta property="og:site_name" content="<?= e($site["title"]) ?>">
-    <meta property="og:title" content="<?= e($is_project ? $project["name"] : $site["title"]) ?>">
+    <meta property="og:title" content="<?= e($og_title) ?>">
     <meta property="og:type" content="<?= $is_project ? "article" : "website" ?>">
 <?php if ($site["url"] !== ""): ?>
     <meta property="og:url" content="<?= e($url) ?>">

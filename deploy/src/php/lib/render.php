@@ -27,6 +27,7 @@ function render_pages($project_list, $project_html, $bio, $config, $cache_dir) {
 
     write_page($cache_dir . "/" . PAGE_FOLDER . "/index.html", render_template("layout.php", $common + [
         "title" => $site["title"],
+        "og_title" => $site["title"],
         "description" => $site["description"],
         "url" => $site["url"] . "/",
         "image" => null,
@@ -46,6 +47,7 @@ function render_pages($project_list, $project_html, $bio, $config, $cache_dir) {
 
         write_page($cache_dir . "/" . PAGE_FOLDER . "/" . $project["id"] . "/index.html", render_template("layout.php", $common + [
             "title" => $site["title"] . " // " . $project["name"],
+            "og_title" => $project["name"],
             "description" => $project["description"],
             "url" => $site["url"] . "/" . $project["id"],
             "image" => $project["preview"] === null ? null : $site["url"] . $project["preview"]["url"],
